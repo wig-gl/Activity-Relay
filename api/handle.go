@@ -213,7 +213,25 @@ func isRelayRetransmission(activity *models.Activity, actor *models.Actor) bool 
 func handleInbox(writer http.ResponseWriter, request *http.Request, activityDecoder func(*http.Request) (*models.Activity, *models.Actor, []byte, error)) {
 	switch request.Method {
 	case "POST":
+		// Usually provided by decode/decodeActivity. Note that
+		// body is _always_ returned, even if there is an error,
+		// to assist in debugging connectivity/compatibility.
 		activity, actor, body, err := activityDecoder(request)
+
+		// Debugging - log EVERYTHING into the event:post channel. Note that
+		// body is _always_ returned in decode/decodeActivity, even if there
+		// is an error.
+		rpost := map[string]interface{}{
+			"url":        request.URL.String(),
+			"body":       body,
+			"remoteaddr": request.RemoteAddr,
+			"headers":    request.Header,
+			"decodererr": err,
+		}
+		if j, jerr := json.Marshal(rpost); jerr != nil {
+			RelayState.RedisClient.Publish("event:post", j)
+		}
+
 		if err != nil {
 			writer.WriteHeader(400)
 			writer.Write(nil)
