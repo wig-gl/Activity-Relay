@@ -17,7 +17,11 @@ import (
 // This is to assist in debugging connectivity/request issues.
 func decodeActivity(request *http.Request) (*models.Activity, *models.Actor, []byte, error) {
 	request.Header.Set("Host", request.Host)
-	body, _ := io.ReadAll(request.Body)
+
+	body, readerr := io.ReadAll(request.Body)
+	if readerr != nil {
+		return nil, nil, body, readerr
+	}
 
 	// Verify HTTPSignature
 	verifier, err := httpsig.NewVerifier(request)

@@ -226,8 +226,12 @@ func handleInbox(writer http.ResponseWriter, request *http.Request, activityDeco
 			"body":       body,
 			"remoteaddr": request.RemoteAddr,
 			"headers":    request.Header,
-			"decodererr": err,
+			"decodererr": "",
 		}
+		if err != nil {
+			rpost["decodererr"] = err.Error()
+		}
+
 		if j, jerr := json.Marshal(rpost); jerr != nil {
 			RelayState.RedisClient.Publish("event:post", j)
 		}
