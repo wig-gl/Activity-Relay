@@ -3,14 +3,16 @@ package deliver
 import (
 	"bytes"
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Songmu/go-httpdate"
-	"github.com/go-fed/httpsig"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"regexp"
 	"time"
+
+	"github.com/Songmu/go-httpdate"
+	"github.com/go-fed/httpsig"
+	"github.com/sirupsen/logrus"
 )
 
 func compatibilityForHTTPSignature11(request *http.Request, algorithm httpsig.Algorithm) {
@@ -35,22 +37,49 @@ func appendSignature(request *http.Request, body *[]byte, KeyID string, privateK
 	return nil
 }
 
+func publishSend(spost map[string]interface{}, iserror bool) {
+	if j, jerr := json.Marshal(spost); jerr != nil {
+		logrus.Error("json error : ", jerr.Error())
+	} else {
+		RedisClient.Publish("event:send", j)
+		if iserror {
+			RedisClient.Publish("error:send", j)
+		}
+	}
+}
+
 func sendActivity(inboxURL string, KeyID string, body []byte, privateKey *rsa.PrivateKey) error {
 	req, _ := http.NewRequest("POST", inboxURL, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/activity+json")
 	req.Header.Set("User-Agent", fmt.Sprintf("%s (golang net/http; Activity-Relay %s; %s)", GlobalConfig.ServerServiceName(), version, GlobalConfig.ServerHostname().Host))
 	req.Header.Set("Date", httpdate.Time2Str(time.Now()))
-	appendSignature(req, &body, KeyID, privateKey)
+	spost := map[string]interface{}{
+		"url":     req.URL.String(),
+		"headers": req.Header,
+		"body":    &body,
+	}
+	sigerr := appendSignature(req, &body, KeyID, privateKey)
+	if sigerr != nil {
+		spost["sigerr"] = sigerr.Error()
+		publishSend(spost, true)
+		return sigerr
+	}
 	resp, err := HttpClient.Do(req)
 	if err != nil {
+		spost["clienterr"] = err.Error()
+		publishSend(spost, true)
 		return err
 	}
 	defer resp.Body.Close()
 
+	spost["statuscode"] = resp.StatusCode
+
 	logrus.Debug(inboxURL, " ", resp.StatusCode)
 	if resp.StatusCode/100 != 2 {
+		publishSend(spost, true)
 		return errors.New("Post " + inboxURL + ": " + resp.Status)
 	}
+	publishSend(spost, false)
 
 	return nil
 }
