@@ -233,6 +233,8 @@ func handleInbox(writer http.ResponseWriter, request *http.Request, activityDeco
 		}
 
 		if j, jerr := json.Marshal(rpost); jerr != nil {
+			logrus.Error("json error : ", jerr.Error())
+		} else {
 			RelayState.RedisClient.Publish("event:post", j)
 		}
 
