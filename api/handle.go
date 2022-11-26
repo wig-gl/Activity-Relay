@@ -106,8 +106,19 @@ func contains(entries interface{}, key string) bool {
 	return false
 }
 
-func enqueueRelayActivity(fromDomain string, body []byte) {
-	activityID := uuid.NewV4()
+func enqueueRelayActivity(fromDomain string, body []byte, activityID uuid.UUID) {
+	// We are going to relay this event, so post it to
+	// redis subscribers for relay peering
+	rpost := map[string]interface{}{
+		"actid": activityID.String(),
+		"body":  body,
+	}
+	if j, jerr := json.Marshal(rpost); jerr == nil {
+		RelayState.RedisClient.Publish("event:relay", j)
+	} else {
+		logrus.Error(jerr)
+	}
+
 	remainCount := len(RelayState.Subscriptions) - 1
 
 	if remainCount < 1 {
@@ -211,6 +222,7 @@ func isRelayRetransmission(activity *models.Activity, actor *models.Actor) bool 
 }
 
 func handleInbox(writer http.ResponseWriter, request *http.Request, activityDecoder func(*http.Request) (*models.Activity, *models.Actor, []byte, error)) {
+	activityID := uuid.NewV4()
 	switch request.Method {
 	case "POST":
 		// Usually provided by decode/decodeActivity. Note that
@@ -222,6 +234,7 @@ func handleInbox(writer http.ResponseWriter, request *http.Request, activityDeco
 		// body is _always_ returned in decode/decodeActivity, even if there
 		// is an error.
 		rpost := map[string]interface{}{
+			"actid":      activityID.String(),
 			"url":        request.URL.String(),
 			"body":       body,
 			"remoteaddr": request.RemoteAddr,
@@ -302,7 +315,7 @@ func handleInbox(writer http.ResponseWriter, request *http.Request, activityDeco
 				if err != nil {
 					writer.WriteHeader(400)
 					writer.Write([]byte(err.Error()))
-
+					logrus.Error("Relay not acceptable for event ", activityID.String(), err.Error())
 					return
 				}
 				if isRelayRetransmission(activity, actor) {
@@ -315,13 +328,13 @@ func handleInbox(writer http.ResponseWriter, request *http.Request, activityDeco
 						case "Note":
 							resp := nestedObject.GenerateAnnounce(GlobalConfig.ServerHostname())
 							jsonData, _ := json.Marshal(&resp)
-							go enqueueRelayActivity(domain.Host, jsonData)
+							go enqueueRelayActivity(domain.Host, jsonData, activityID)
 							logrus.Debug("Accepted Announce Note : ", activity.Actor)
 						default:
 							logrus.Debug("Skipped Announce ", nestedObject.Type, " : ", activity.Actor)
 						}
 					} else {
-						go enqueueRelayActivity(domain.Host, body)
+						go enqueueRelayActivity(domain.Host, body, activityID)
 						logrus.Debug("Accepted Relay Activity : ", activity.Actor)
 					}
 				} else {

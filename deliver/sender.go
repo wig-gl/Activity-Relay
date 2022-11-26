@@ -68,6 +68,7 @@ func sendActivity(inboxURL string, KeyID string, body []byte, privateKey *rsa.Pr
 	starttime := time.Now()
 	resp, err := HttpClient.Do(req)
 	spost["elapsed"] = time.Since(starttime).Milliseconds()
+	spost["status"] = resp.Status
 	if err != nil {
 		spost["clienterr"] = err.Error()
 		publishSend(spost, true)
