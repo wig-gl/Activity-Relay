@@ -158,8 +158,9 @@ func enqueueRelayActivity(fromDomain string, body []byte, activityID uuid.UUID) 
 
 func enqueueRegisterActivity(inboxURL string, body []byte) {
 	job := &tasks.Signature{
-		Name:       "register",
-		RetryCount: 2,
+		Name:         "register",
+		RetryCount:   2,
+		RetryTimeout: 60,
 		Args: []tasks.Arg{
 			{
 				Name:  "inboxURL",
