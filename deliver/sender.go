@@ -49,7 +49,7 @@ func publishSend(spost map[string]interface{}, iserror bool) {
 	}
 }
 
-func sendActivity(inboxURL string, KeyID string, body []byte, privateKey *rsa.PrivateKey) error {
+func sendActivity(inboxURL string, activityID string, KeyID string, body []byte, privateKey *rsa.PrivateKey) error {
 	req, _ := http.NewRequest("POST", inboxURL, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/activity+json")
 	req.Header.Set("User-Agent", fmt.Sprintf("%s (golang net/http; Activity-Relay %s; %s)", GlobalConfig.ServerServiceName(), version, GlobalConfig.ServerHostname().Host))
@@ -58,6 +58,7 @@ func sendActivity(inboxURL string, KeyID string, body []byte, privateKey *rsa.Pr
 		"url":     req.URL.String(),
 		"headers": req.Header,
 		"body":    &body,
+		"actid":   activityID,
 	}
 	sigerr := appendSignature(req, &body, KeyID, privateKey)
 	if sigerr != nil {
