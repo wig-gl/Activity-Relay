@@ -157,10 +157,11 @@ func enqueueRelayActivity(fromDomain string, body []byte, activityID uuid.UUID) 
 }
 
 func enqueueRegisterActivity(inboxURL string, body []byte) {
+	logrus.Error("RegisterAct to ", inboxURL, string(body))
 	job := &tasks.Signature{
 		Name:         "register",
-		RetryCount:   2,
-		RetryTimeout: 60,
+		RetryCount:   5,
+		RetryTimeout: 10,
 		Args: []tasks.Arg{
 			{
 				Name:  "inboxURL",

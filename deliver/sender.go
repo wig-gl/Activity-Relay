@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Songmu/go-httpdate"
@@ -24,7 +25,8 @@ func compatibilityForHTTPSignature11(request *http.Request, algorithm httpsig.Al
 }
 
 func appendSignature(request *http.Request, body *[]byte, KeyID string, privateKey *rsa.PrivateKey) error {
-	request.Header.Set("Host", request.Host)
+	normalised := strings.ToLower(request.Host)
+	request.Header.Set("Host", normalised)
 
 	signer, _, err := httpsig.NewSigner([]httpsig.Algorithm{httpsig.RSA_SHA256}, httpsig.DigestSha256, []string{httpsig.RequestTarget, "Host", "Date", "Digest", "Content-Type"}, httpsig.Signature, 60*60)
 	if err != nil {
